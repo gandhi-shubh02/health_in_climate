@@ -103,6 +103,7 @@ interface AppState {
   setIsLoading: (loading: boolean) => void;
   updateResource: (id: string, updates: Partial<Resource>) => void;
   addAlert: (alert: PredictiveAlert) => void;
+  removeAlert: (alertId: string) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -135,6 +136,9 @@ export const useAppStore = create<AppState>()(
       })),
       addAlert: (alert) => set((state) => ({
         alerts: [...state.alerts, alert]
+      })),
+      removeAlert: (alertId) => set((state) => ({
+        alerts: state.alerts.filter(alert => alert.id !== alertId)
       })),
     }),
     {

@@ -9,7 +9,7 @@ import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
 
 export default function Predictive() {
-  const { alerts, addAlert } = useAppStore();
+  const { alerts, addAlert, removeAlert } = useAppStore();
   const [counties, setCounties] = useState(mockCounties);
   const [isLoading, setIsLoading] = useState(false);
   const [isPredicting, setIsPredicting] = useState(false);
@@ -63,6 +63,7 @@ export default function Predictive() {
   );
 
   const acknowledgeAlert = (alertId: string) => {
+    removeAlert(alertId);
     toast.success('Alert acknowledged');
   };
 

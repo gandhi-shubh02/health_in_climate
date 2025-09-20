@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { RiskBadge } from '@/components/ui/risk-badge';
 import { StatCard } from '@/components/ui/stat-card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAppStore } from '@/lib/store';
 import { mockCounties, mockResources, mockScenarios } from '@/lib/mock-data';
 import { 
@@ -46,43 +47,141 @@ export default function Allocation() {
     // Simulate optimization algorithm
     await new Promise(resolve => setTimeout(resolve, 3000));
     
-    // Create optimized allocation scenario
-    const newScenario = {
-      id: `scenario-${Date.now()}`,
-      name: `Optimization Run ${new Date().toLocaleTimeString()}`,
-      created_at: new Date().toISOString(),
-      total_resources: resources.reduce((sum, r) => sum + r.available_qty, 0),
-      counties_served: counties.length,
-      optimization_objective: 'minimize_risk_exposure',
-      allocations: counties.flatMap(county => 
-        resources
-          .filter(resource => 
-            (county.computed_risk_score >= 90 && resource.disaster_tags.includes('extreme_heat')) ||
-            (county.aqi_category === 'Unhealthy' && resource.disaster_tags.includes('air_quality'))
-          )
-          .map(resource => {
-            // Risk-based allocation logic
-            const riskMultiplier = county.computed_risk_score / 100;
-            const populationFactor = Math.min(county.e_totpop / 1000000, 1);
-            const baseAllocation = resource.available_qty * 0.1;
-            const allocated = Math.floor(baseAllocation * riskMultiplier * populationFactor);
-            
-            return {
-              county_id: county.id,
-              resource_id: resource.id,
-              allocated_quantity: allocated,
-              need_met_percentage: Math.min((allocated / (county.e_totpop / 10000)) * 100, 100)
-            };
-          })
-      )
-    };
+    try {
+      // Step 1: Calculate county priorities and needs
+      const countyPriorities = counties.map(county => {
+        // Normalize risk score (0-1)
+        const riskFactor = county.computed_risk_score / 100;
+        
+        // Population vulnerability factor (weighted by age and demographics)
+        const vulnerabilityFactor = (
+          (county.e_age65 / 100) * 0.3 + // Elderly population weight
+          (county.eminrty / 100) * 0.2 + // Minority population weight
+          (county.e_unemp / 100) * 0.2 + // Unemployment weight
+          (county.e_nohsdp / 100) * 0.3   // Education weight
+        );
+        
+        // Population density factor
+        const densityFactor = Math.min((county.e_totpop / county.area_sqmi) / 1000, 1);
+        
+        // Combined priority score
+        const priorityScore = (riskFactor * 0.5) + (vulnerabilityFactor * 0.3) + (densityFactor * 0.2);
+        
+        return {
+          ...county,
+          priorityScore,
+          riskFactor,
+          vulnerabilityFactor,
+          densityFactor
+        };
+      }).sort((a, b) => b.priorityScore - a.priorityScore);
 
-    addScenario(newScenario);
-    setSelectedScenario(newScenario);
-    setOptimizing(false);
-    setIsLoading(false);
-    
-    toast.success('Resource allocation optimization completed!');
+      // Step 2: Resource allocation with constraints
+      const allocations = [];
+      const resourceTracker = Object.fromEntries(
+        resources.map(r => [r.id, { available: r.available_qty, allocated: 0 }])
+      );
+
+      // Step 3: Allocate resources based on priority and need matching
+      for (const county of countyPriorities) {
+        for (const resource of resources) {
+          if (resourceTracker[resource.id].available <= 0) continue;
+
+          // Determine if county needs this resource type
+          let needsResource = false;
+          let needIntensity = 0;
+
+          // Heat-related needs
+          if (resource.disaster_tags.includes('extreme_heat')) {
+            if (county.computed_risk_score >= 70 || county.rolling_avg_ta_max >= 85) {
+              needsResource = true;
+              needIntensity = Math.min(county.computed_risk_score / 100, 1);
+            }
+          }
+
+          // Air quality needs
+          if (resource.disaster_tags.includes('air_quality')) {
+            if (['Unhealthy for Sensitive Groups', 'Unhealthy', 'Very Unhealthy'].includes(county.aqi_category)) {
+              needsResource = true;
+              needIntensity = county.aqi_category === 'Very Unhealthy' ? 1.0 :
+                             county.aqi_category === 'Unhealthy' ? 0.8 : 0.6;
+            }
+          }
+
+          // General emergency needs (all counties get some allocation)
+          if (resource.disaster_tags.includes('general_emergency')) {
+            needsResource = true;
+            needIntensity = county.priorityScore;
+          }
+
+          // Power outage needs (high temperature areas)
+          if (resource.disaster_tags.includes('power_outage')) {
+            if (county.ta_max >= 80) {
+              needsResource = true;
+              needIntensity = Math.min((county.ta_max - 70) / 30, 1);
+            }
+          }
+
+          if (needsResource) {
+            // Calculate allocation amount
+            const baseNeed = Math.ceil(county.e_totpop / 50000); // Base need per 50k population
+            const adjustedNeed = Math.ceil(baseNeed * needIntensity * county.priorityScore);
+            
+            // Apply resource constraints
+            const maxAllocation = Math.min(
+              adjustedNeed,
+              resourceTracker[resource.id].available,
+              Math.floor(resource.available_qty * 0.4) // Max 40% of total resource to any county
+            );
+
+            if (maxAllocation > 0) {
+              // Calculate actual need met percentage
+              const estimatedNeed = Math.max(baseNeed, 1);
+              const needMetPercentage = Math.min((maxAllocation / estimatedNeed) * 100, 100);
+
+              allocations.push({
+                county_id: county.id,
+                resource_id: resource.id,
+                allocated_quantity: maxAllocation,
+                need_met_percentage: needMetPercentage
+              });
+
+              // Update resource tracker
+              resourceTracker[resource.id].available -= maxAllocation;
+              resourceTracker[resource.id].allocated += maxAllocation;
+            }
+          }
+        }
+      }
+
+      // Step 4: Create scenario with results
+      const totalAllocatedResources = Object.values(resourceTracker)
+        .reduce((sum, tracker) => sum + tracker.allocated, 0);
+      
+      const countiesServed = new Set(allocations.map(a => a.county_id)).size;
+
+      const newScenario = {
+        id: `scenario-${Date.now()}`,
+        name: `Optimization Run ${new Date().toLocaleTimeString()}`,
+        created_at: new Date().toISOString(),
+        total_resources: totalAllocatedResources,
+        counties_served: countiesServed,
+        optimization_objective: 'minimize_risk_exposure',
+        allocations: allocations.filter(a => a.allocated_quantity > 0)
+      };
+
+      addScenario(newScenario);
+      setSelectedScenario(newScenario);
+      
+      toast.success(`Allocation completed! ${countiesServed} counties served with ${totalAllocatedResources.toLocaleString()} resources allocated.`);
+      
+    } catch (error) {
+      console.error('Optimization failed:', error);
+      toast.error('Optimization failed. Please try again.');
+    } finally {
+      setOptimizing(false);
+      setIsLoading(false);
+    }
   };
 
   const currentScenario = selectedScenario || mockScenarios[0];
@@ -155,62 +254,133 @@ export default function Allocation() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Allocation Matrix */}
+        {/* Allocation Matrix - Grouped by County */}
         <div className="lg:col-span-2">
           <Card>
             <CardHeader>
-              <CardTitle>Allocation Matrix</CardTitle>
+              <CardTitle>Allocation Matrix by County</CardTitle>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>County</TableHead>
-                    <TableHead>Risk Score</TableHead>
-                    <TableHead>Resource</TableHead>
-                    <TableHead>Allocated</TableHead>
-                    <TableHead>Need Met %</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {currentScenario?.allocations.map((allocation, index) => {
-                    const county = counties.find(c => c.id === allocation.county_id);
-                    const resource = resources.find(r => r.id === allocation.resource_id);
+              {currentScenario?.allocations && currentScenario.allocations.length > 0 ? (() => {
+                // Group allocations by county
+                const allocationsByCounty = currentScenario.allocations.reduce((acc, allocation) => {
+                  const countyId = allocation.county_id;
+                  if (!acc[countyId]) {
+                    acc[countyId] = [];
+                  }
+                  acc[countyId].push(allocation);
+                  return acc;
+                }, {} as Record<string, typeof currentScenario.allocations>);
+
+                const countiesWithAllocations = Object.keys(allocationsByCounty).map(countyId => {
+                  const county = counties.find(c => c.id === countyId);
+                  const countyAllocations = allocationsByCounty[countyId];
+                  const totalAllocated = countyAllocations.reduce((sum, alloc) => sum + alloc.allocated_quantity, 0);
+                  const avgNeedMet = countyAllocations.reduce((sum, alloc) => sum + alloc.need_met_percentage, 0) / countyAllocations.length;
+                  
+                  return {
+                    county,
+                    allocations: countyAllocations,
+                    totalAllocated,
+                    avgNeedMet
+                  };
+                }).sort((a, b) => b.totalAllocated - a.totalAllocated);
+
+                return (
+                  <Tabs defaultValue={countiesWithAllocations[0]?.county?.id || ''} className="w-full">
+                    <TabsList className={`grid w-full ${
+                      countiesWithAllocations.length <= 2 ? 'grid-cols-2' :
+                      countiesWithAllocations.length <= 3 ? 'grid-cols-3' :
+                      countiesWithAllocations.length <= 4 ? 'grid-cols-4' :
+                      'grid-cols-5'
+                    }`}>
+                      {countiesWithAllocations.slice(0, 5).map(({ county }) => (
+                        <TabsTrigger key={county?.id} value={county?.id || ''} className="text-xs truncate">
+                          {county?.countyName || 'Unknown'}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
                     
-                    return (
-                      <TableRow key={index}>
-                        <TableCell className="font-medium">
-                          {county?.countyName || 'Unknown County'}
-                        </TableCell>
-                        <TableCell>
-                          {county && <RiskBadge risk={county.computed_risk_score} />}
-                        </TableCell>
-                        <TableCell>{resource?.resource_name || 'Unknown Resource'}</TableCell>
-                        <TableCell>
-                          {allocation.allocated_quantity.toLocaleString()} {resource?.unit}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center space-x-2">
-                            <div className="flex-1 bg-muted rounded-full h-2">
-                              <div 
-                                className={`h-2 rounded-full ${
-                                  allocation.need_met_percentage >= 80 ? 'bg-success' :
-                                  allocation.need_met_percentage >= 60 ? 'bg-warning' :
-                                  'bg-emergency'
-                                }`}
-                                style={{ width: `${Math.min(allocation.need_met_percentage, 100)}%` }}
-                              />
-                            </div>
-                            <span className="text-sm font-medium">
-                              {allocation.need_met_percentage.toFixed(1)}%
-                            </span>
+                    {countiesWithAllocations.map(({ county, allocations, totalAllocated, avgNeedMet }) => (
+                      <TabsContent key={county?.id} value={county?.id || ''} className="space-y-4">
+                        {/* County Summary */}
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-muted/50 rounded-lg">
+                          <div className="text-center">
+                            <div className="text-sm text-muted-foreground">County</div>
+                            <div className="font-semibold">{county?.countyName}</div>
                           </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                          <div className="text-center">
+                            <div className="text-sm text-muted-foreground">Risk Score</div>
+                            <div className="font-semibold">
+                              <RiskBadge risk={county?.computed_risk_score || 0} />
+                            </div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-sm text-muted-foreground">Total Allocated</div>
+                            <div className="font-semibold">{totalAllocated.toLocaleString()}</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-sm text-muted-foreground">Avg Need Met</div>
+                            <div className="font-semibold">{avgNeedMet.toFixed(1)}%</div>
+                          </div>
+                        </div>
+
+                        {/* Resource Allocations Table */}
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Resource</TableHead>
+                              <TableHead>Category</TableHead>
+                              <TableHead>Allocated</TableHead>
+                              <TableHead>Need Met %</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {allocations.map((allocation, index) => {
+                              const resource = resources.find(r => r.id === allocation.resource_id);
+                              
+                              return (
+                                <TableRow key={`${allocation.resource_id}-${index}`}>
+                                  <TableCell className="font-medium">
+                                    {resource?.resource_name || 'Unknown Resource'}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge variant="outline">{resource?.category}</Badge>
+                                  </TableCell>
+                                  <TableCell>
+                                    {allocation.allocated_quantity.toLocaleString()} {resource?.unit}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center space-x-2">
+                                      <div className="flex-1 bg-muted rounded-full h-2">
+                                        <div 
+                                          className={`h-2 rounded-full ${
+                                            allocation.need_met_percentage >= 80 ? 'bg-success' :
+                                            allocation.need_met_percentage >= 60 ? 'bg-warning' :
+                                            'bg-emergency'
+                                          }`}
+                                          style={{ width: `${Math.min(allocation.need_met_percentage, 100)}%` }}
+                                        />
+                                      </div>
+                                      <span className="text-sm font-medium">
+                                        {allocation.need_met_percentage.toFixed(1)}%
+                                      </span>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </TabsContent>
+                    ))}
+                  </Tabs>
+                );
+              })() : (
+                <div className="text-center text-muted-foreground py-8">
+                  No allocations available. Run optimization to generate resource allocation plan.
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -259,7 +429,9 @@ export default function Allocation() {
                     .filter(a => a.resource_id === resource.id)
                     .reduce((sum, a) => sum + a.allocated_quantity, 0) || 0;
                   
-                  const utilizationPct = (allocatedQty / resource.available_qty) * 100;
+                  const utilizationPct = resource.available_qty > 0 
+                    ? (allocatedQty / resource.available_qty) * 100 
+                    : 0;
                   
                   return (
                     <div key={resource.id} className="space-y-1">
