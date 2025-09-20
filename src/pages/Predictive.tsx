@@ -1,368 +1,296 @@
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { StatCard } from '@/components/ui/stat-card';
+import { Bell, Activity, Wind, Thermometer, Droplets, AlertTriangle } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
-import { mockCounties, mockAlerts } from '@/lib/mock-data';
-import { 
-  Brain,
-  AlertTriangle,
-  TrendingUp,
-  Calendar,
-  ThermometerSun,
-  Wind,
-  Users,
-  Zap,
-  Mail,
-  Play
-} from 'lucide-react';
-import toast from 'react-hot-toast';
+import { mockCounties } from '@/lib/mock-data';
+import { toast } from 'react-hot-toast';
+import { format } from 'date-fns';
 
 export default function Predictive() {
-  const { 
-    counties, 
-    alerts,
-    setCounties, 
-    addAlert,
-    isLoading,
-    setIsLoading 
-  } = useAppStore();
-
-  const [predicting, setPredicting] = useState(false);
+  const { alerts, addAlert } = useAppStore();
+  const [counties, setCounties] = useState(mockCounties);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isPredicting, setIsPredicting] = useState(false);
 
   useEffect(() => {
     setCounties(mockCounties);
-  }, [setCounties]);
+  }, []);
 
   const runPrediction = async () => {
-    setPredicting(true);
+    setIsPredicting(true);
     setIsLoading(true);
     
-    // Simulate ML prediction process
-    await new Promise(resolve => setTimeout(resolve, 2500));
-    
-    // Generate new predictions based on current data
-    const predictions = counties.map(county => {
-      const futureRisk = county.computed_risk_score + (Math.random() * 20 - 10);
-      const riskIncrease = futureRisk > county.computed_risk_score;
+    try {
+      // Simulate ML prediction process
+      await new Promise(resolve => setTimeout(resolve, 3000));
       
-      if (futureRisk > 85 || riskIncrease) {
-        return {
-          id: `pred-${Date.now()}-${county.id}`,
+      // Generate new alerts based on simulated future risks
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 7);
+      
+      const newAlerts = counties
+        .filter(() => Math.random() > 0.7) // Randomly select some counties
+        .map(county => ({
+          id: `alert-${Date.now()}-${Math.random()}`,
           county_id: county.id,
-          alert_type: futureRisk > 95 || county.ta_max > 100 ? 'extreme_heat' as const : 
-                     county.aqi_category.includes('Unhealthy') ? 'air_quality' as const : 
-                     'resource_gap' as const,
-          severity: futureRisk > 95 ? 'critical' as const :
-                   futureRisk > 80 ? 'high' as const :
-                   futureRisk > 65 ? 'medium' as const : 'low' as const,
-          predicted_date: new Date(Date.now() + Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          confidence: 0.7 + Math.random() * 0.25,
-          message: futureRisk > 95 
-            ? `Extreme heat event predicted for ${county.countyName} County with temperatures potentially exceeding ${(county.ta_max + 5).toFixed(1)}°F`
-            : `Elevated risk conditions predicted for ${county.countyName} County`,
+          alert_type: Math.random() > 0.5 ? 'extreme_heat' as const : 'air_quality' as const,
+          severity: Math.random() > 0.5 ? 'critical' as const : 'high' as const,
+          predicted_date: futureDate.toISOString().split('T')[0],
+          confidence: (Math.floor(Math.random() * 30 + 70)) / 100, // 0.70-0.99
+          message: `Predicted ${Math.random() > 0.5 ? 'extreme heat event' : 'wildfire risk'} based on current trends`,
           recommendations: [
-            'Monitor weather patterns closely',
-            'Pre-position emergency resources',
-            'Activate community outreach protocols'
+            'Increase water supply reserves by 40%',
+            'Pre-position firefighting equipment',
+            'Issue evacuation readiness alerts'
           ]
-        };
-      }
-      return null;
-    }).filter(Boolean);
-
-    predictions.forEach(pred => pred && addAlert(pred));
-    
-    setPredicting(false);
-    setIsLoading(false);
-    
-    toast.success(`Generated ${predictions.length} new risk predictions`);
+        }));
+      
+      newAlerts.forEach(alert => addAlert(alert));
+      
+      toast.success(`Generated ${newAlerts.length} new predictive alerts`);
+    } catch (error) {
+      toast.error('Failed to run prediction');
+    } finally {
+      setIsPredicting(false);
+      setIsLoading(false);
+    }
   };
 
-  const sendAlerts = () => {
-    const criticalAlerts = [...mockAlerts, ...alerts].filter(alert => 
-      alert.severity === 'critical' || alert.severity === 'high'
-    );
-    
-    // Simulate sending email alerts
-    toast.success(`Sent ${criticalAlerts.length} emergency alerts to stakeholders`);
+  const activeAlerts = alerts.filter(alert => 
+    alert.severity === 'critical' || alert.severity === 'high'
+  );
+
+  const acknowledgeAlert = (alertId: string) => {
+    toast.success('Alert acknowledged');
   };
 
-  const allAlerts = [...mockAlerts, ...alerts];
-  const criticalCount = allAlerts.filter(a => a.severity === 'critical').length;
-  const highCount = allAlerts.filter(a => a.severity === 'high').length;
-  const avgConfidence = allAlerts.length > 0 
-    ? allAlerts.reduce((sum, a) => sum + a.confidence, 0) / allAlerts.length 
-    : 0;
+  // Environmental monitoring data for counties
+  const environmentalData = [
+    {
+      name: 'Los Angeles County',
+      aqi: 165,
+      temp: 95,
+      humidity: 25,
+      wind: 15,
+      co2: 450,
+      riskLevel: 'critical'
+    },
+    {
+      name: 'Orange County', 
+      aqi: 142,
+      temp: 89,
+      humidity: 30,
+      wind: 12,
+      co2: 380,
+      riskLevel: 'high'
+    },
+    {
+      name: 'San Diego County',
+      aqi: 98,
+      temp: 78,
+      humidity: 65,
+      wind: 8,
+      co2: 290,
+      riskLevel: 'medium'
+    }
+  ];
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Predictive Risk Alerts</h1>
-          <p className="text-muted-foreground">
-            7-day risk forecasting and automated emergency notifications
+    <div className="space-y-8">
+      {/* Header Section */}
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <Bell className="h-8 w-8 text-primary" />
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Predictive Alert System</h1>
+            <p className="text-muted-foreground">
+              AI-powered early warning system using environmental data and risk factors
+            </p>
+          </div>
+        </div>
+
+        {/* Action Bar */}
+        <div className="flex items-center gap-4">
+          <Button 
+            onClick={runPrediction} 
+            disabled={isPredicting}
+            className="bg-primary hover:bg-primary/90"
+          >
+            <Activity className="h-4 w-4 mr-2" />
+            {isPredicting ? 'Running Analysis...' : 'Run Predictive Analysis'}
+          </Button>
+          
+          <div className="flex items-center gap-6 text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">{activeAlerts.length} Active Alerts</span>
+            <span className="font-medium text-foreground">3 Data Sources</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Active Alerts Section */}
+      {activeAlerts.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold text-foreground">Active Predictive Alerts</h2>
+          <p className="text-sm text-muted-foreground">
+            AI-generated alerts based on environmental analysis and risk modeling
           </p>
-        </div>
-        <div className="flex space-x-2">
-          <Button 
-            variant="outline"
-            onClick={sendAlerts}
-            className="flex items-center space-x-2"
-          >
-            <Mail className="w-4 h-4" />
-            <span>Send Alerts</span>
-          </Button>
-          <Button 
-            onClick={runPrediction}
-            disabled={predicting || isLoading}
-            className="bg-gradient-primary"
-          >
-            {predicting ? (
-              <>
-                <Brain className="w-4 h-4 mr-2 animate-pulse" />
-                Analyzing...
-              </>
-            ) : (
-              <>
-                <Play className="w-4 h-4 mr-2" />
-                Run Prediction
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard
-          title="Critical Alerts"
-          value={criticalCount}
-          change={criticalCount > 0 ? "Immediate action required" : "No critical alerts"}
-          changeType={criticalCount > 0 ? "negative" : "positive"}
-          icon={<AlertTriangle className="h-4 w-4" />}
-        />
-        <StatCard
-          title="High Priority Alerts"
-          value={highCount}
-          description="Requires monitoring"
-          icon={<TrendingUp className="h-4 w-4" />}
-        />
-        <StatCard
-          title="Prediction Confidence"
-          value={`${(avgConfidence * 100).toFixed(1)}%`}
-          description="Average model confidence"
-          icon={<Brain className="h-4 w-4" />}
-        />
-        <StatCard
-          title="Forecast Period"
-          value="7 Days"
-          description="Prediction window"
-          icon={<Calendar className="h-4 w-4" />}
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Alerts Table */}
-        <div className="lg:col-span-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Risk Predictions & Alerts</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>County</TableHead>
-                    <TableHead>Alert Type</TableHead>
-                    <TableHead>Severity</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Confidence</TableHead>
-                    <TableHead>Message</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {allAlerts.map((alert) => {
-                    const county = counties.find(c => c.id === alert.county_id);
+          
+          <div className="space-y-4">
+            {activeAlerts.map((alert) => (
+              <Card key={alert.id} className="relative overflow-hidden">
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-emergency"></div>
+                <CardContent className="p-6 pl-8">
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-3 flex-1">
+                      <div className="flex items-center gap-3">
+                        <AlertTriangle className="h-5 w-5 text-emergency" />
+                        <h3 className="text-lg font-semibold text-foreground capitalize">
+                          {alert.alert_type.replace('_', ' ')}
+                        </h3>
+                      </div>
+                      
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <span>{counties.find(c => c.id === alert.county_id)?.countyName || 'Unknown County'}</span>
+                        <span>•</span>
+                        <span>Predicted: {format(new Date(alert.predicted_date), 'M/d/yyyy')}</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-4">
+                        <Badge 
+                          variant="outline" 
+                          className={`${
+                            alert.severity === 'critical' 
+                              ? 'border-emergency text-emergency' 
+                              : 'border-warning text-warning'
+                          }`}
+                        >
+                          {alert.severity === 'critical' ? 'Critical Risk' : 'High Risk'}
+                        </Badge>
+                        <span className="text-sm text-muted-foreground">
+                          Confidence: <span className="font-medium text-foreground">{Math.round(alert.confidence * 100)}%</span>
+                        </span>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <h4 className="font-medium text-foreground">Recommended Actions:</h4>
+                        <ul className="space-y-1 text-sm text-muted-foreground">
+                          {alert.recommendations.map((rec, index) => (
+                            <li key={index} className="flex items-start gap-2">
+                              <span className="text-primary mt-1">•</span>
+                              {rec}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
                     
-                    return (
-                      <TableRow key={alert.id}>
-                        <TableCell className="font-medium">
-                          {county?.countyName || 'Unknown County'}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center space-x-2">
-                            {alert.alert_type === 'extreme_heat' && (
-                              <ThermometerSun className="h-4 w-4 text-emergency" />
-                            )}
-                            {alert.alert_type === 'air_quality' && (
-                              <Wind className="h-4 w-4 text-warning" />
-                            )}
-                            {alert.alert_type === 'resource_gap' && (
-                              <Users className="h-4 w-4 text-muted-foreground" />
-                            )}
-                            <span className="capitalize">
-                              {alert.alert_type.replace('_', ' ')}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge 
-                            variant={
-                              alert.severity === 'critical' ? 'destructive' :
-                              alert.severity === 'high' ? 'default' :
-                              'outline'
-                            }
-                          >
-                            {alert.severity}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{alert.predicted_date}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center space-x-2">
-                            <div className="flex-1 bg-muted rounded-full h-2 max-w-[60px]">
-                              <div 
-                                className="h-2 rounded-full bg-primary"
-                                style={{ width: `${alert.confidence * 100}%` }}
-                              />
-                            </div>
-                            <span className="text-sm">
-                              {(alert.confidence * 100).toFixed(0)}%
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="max-w-xs">
-                          <div className="truncate" title={alert.message}>
-                            {alert.message}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => acknowledgeAlert(alert.id)}
+                      className="ml-4"
+                    >
+                      Acknowledge
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
+      )}
 
-        {/* Model Info & Controls */}
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Brain className="h-5 w-5" />
-                <span>ML Model Status</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Model Version</span>
-                  <span className="font-mono">v2.1.3</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span>Last Training</span>
-                  <span>2024-09-15</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span>Features Used</span>
-                  <span>12</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span>Accuracy</span>
-                  <span>87.3%</span>
-                </div>
-              </div>
-
-              <div className="pt-2 border-t">
-                <h4 className="text-sm font-semibold mb-2">Input Features</h4>
-                <div className="space-y-1 text-xs text-muted-foreground">
-                  <div>• Temperature trends (Ta_max, Ta_avg)</div>
-                  <div>• Air quality indicators (AQI)</div>
-                  <div>• Healthcare metrics (ED admissions)</div>
-                  <div>• Demographics (unemployment, age 65+)</div>
-                  <div>• Historical risk patterns</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Zap className="h-5 w-5" />
-                <span>Alert Distribution</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
+      {/* Environmental Monitoring Cards */}
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold text-foreground">Real-time Environmental Monitoring</h2>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {environmentalData.map((county) => (
+            <Card key={county.name} className="relative">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-lg">{county.name}</CardTitle>
+                <p className="text-sm text-muted-foreground">Real-time environmental monitoring</p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* AQI */}
                 <div className="flex items-center justify-between">
-                  <span className="text-sm">Critical Alerts</span>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-8 bg-muted rounded-full h-2">
-                      <div 
-                        className="h-2 rounded-full bg-emergency"
-                        style={{ width: `${(criticalCount / Math.max(allAlerts.length, 1)) * 100}%` }}
-                      />
-                    </div>
-                    <span className="text-sm font-medium">{criticalCount}</span>
+                  <div className="flex items-center gap-2">
+                    <Activity className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm">AQI</span>
                   </div>
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">High Priority</span>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-8 bg-muted rounded-full h-2">
-                      <div 
-                        className="h-2 rounded-full bg-warning"
-                        style={{ width: `${(highCount / Math.max(allAlerts.length, 1)) * 100}%` }}
-                      />
-                    </div>
-                    <span className="text-sm font-medium">{highCount}</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">Medium/Low</span>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-8 bg-muted rounded-full h-2">
-                      <div 
-                        className="h-2 rounded-full bg-primary"
-                        style={{ width: `${((allAlerts.length - criticalCount - highCount) / Math.max(allAlerts.length, 1)) * 100}%` }}
-                      />
-                    </div>
-                    <span className="text-sm font-medium">
-                      {allAlerts.length - criticalCount - highCount}
+                  <div className="flex items-center gap-2">
+                    <span className={`text-lg font-bold ${
+                      county.aqi > 150 ? 'text-emergency' : 
+                      county.aqi > 100 ? 'text-warning' : 'text-success'
+                    }`}>
+                      {county.aqi}
                     </span>
+                    {county.aqi > 150 && (
+                      <Badge variant="outline" className="text-xs bg-emergency/10 text-emergency border-emergency">
+                        2
+                      </Badge>
+                    )}
                   </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Next Scheduled Run</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-foreground">
-                  {new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleDateString()}
+                {/* Temperature */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Thermometer className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm">Temp</span>
+                  </div>
+                  <span className="text-lg font-bold text-foreground">{county.temp}°F</span>
                 </div>
-                <div className="text-sm text-muted-foreground">
-                  6:00 AM UTC
+
+                {/* Humidity */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Droplets className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm">Humidity</span>
+                  </div>
+                  <span className="text-sm font-medium text-foreground">{county.humidity}%</span>
                 </div>
-                <div className="text-xs text-muted-foreground mt-2">
-                  Automated daily prediction update
+
+                {/* Wind */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Wind className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm">Wind</span>
+                  </div>
+                  <span className="text-sm font-medium text-foreground">{county.wind} mph</span>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+
+                {/* CO2 Emissions */}
+                <div className="pt-2 border-t border-border">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">CO₂ Emissions</span>
+                    <span className="text-sm font-bold text-foreground">{county.co2} ppm</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
+
+      {/* No Alerts State */}
+      {activeAlerts.length === 0 && (
+        <Card className="text-center py-12">
+          <CardContent>
+            <Bell className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium text-foreground mb-2">No Active Alerts</h3>
+            <p className="text-muted-foreground mb-4">
+              Run predictive analysis to generate alerts based on environmental data and risk factors.
+            </p>
+            <Button onClick={runPrediction} disabled={isPredicting}>
+              <Activity className="h-4 w-4 mr-2" />
+              {isPredicting ? 'Running Analysis...' : 'Run Predictive Analysis'}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
