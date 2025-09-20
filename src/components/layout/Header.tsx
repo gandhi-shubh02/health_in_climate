@@ -11,8 +11,10 @@ const navigation = [
 ];
 
 export function Header() {
+  console.log('Header component rendering...');
   const location = useLocation();
   const navigate = useNavigate();
+  console.log('Header location:', location);
 
   return (
     <header className="border-b border-border bg-card shadow-sm">

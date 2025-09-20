@@ -13,7 +13,9 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-const App = () => (
+const App = () => {
+  console.log('App component rendering...');
+  return (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
@@ -30,21 +32,30 @@ const App = () => (
         }}
       />
       <BrowserRouter>
-        <div className="min-h-screen bg-background">
-          <Header />
-          <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/map" element={<Map />} />
-              <Route path="/allocation" element={<Allocation />} />
-              <Route path="/predictive" element={<Predictive />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </main>
-        </div>
+        <AppContent />
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
-);
+  );
+};
+
+// Separate component to ensure it's definitely inside Router context
+const AppContent = () => {
+  console.log('AppContent rendering inside Router...');
+  return (
+    <div className="min-h-screen bg-background">
+      <Header />
+      <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/map" element={<Map />} />
+          <Route path="/allocation" element={<Allocation />} />
+          <Route path="/predictive" element={<Predictive />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </main>
+    </div>
+  );
+};
 
 export default App;
