@@ -7,100 +7,238 @@ import { useAppStore } from '@/lib/store';
 import { mockCounties } from '@/lib/mock-data';
 import { MapPin, Layers, Activity, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
+import maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 
-// Simple map component using CSS transforms for county markers
-const MapVisualization = () => {
-  const { counties, selectedCounty, setSelectedCounty, mapView, setMapView } = useAppStore();
+const InteractiveMap = () => {
+  const mapContainer = useRef<HTMLDivElement>(null);
+  const map = useRef<maplibregl.Map | null>(null);
+  const { counties, selectedCounty, setSelectedCounty, mapView } = useAppStore();
+  const [mapLoaded, setMapLoaded] = useState(false);
 
-  const handleCountyClick = (county: typeof counties[0]) => {
-    setSelectedCounty(county);
-    toast.success(`Selected ${county.countyName} County`);
-  };
+  useEffect(() => {
+    if (!mapContainer.current || map.current) return;
 
-  return (
-    <div className="relative w-full h-[600px] bg-surface rounded-lg border overflow-hidden">
-      {/* Map Background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-slate-800 dark:to-slate-900">
-        {/* Simulated US Map Background */}
-        <div className="absolute inset-0 opacity-20 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8ZGVmcz4KICAgIDxwYXR0ZXJuIGlkPSJncmlkIiB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHBhdHRlcm5Vbml0cz0idXNlclNwYWNlT25Vc2UiPgogICAgICA8cGF0aCBkPSJNIDEwIDAgTCAwIDAgMCAxMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjY2NjIiBzdHJva2Utd2lkdGg9IjAuNSIvPgogICAgPC9wYXR0ZXJuPgogIDwvZGVmcz4KICA8cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0idXJsKCNncmlkKSIvPgo8L3N2Zz4K')] bg-repeat"></div>
-      </div>
+    map.current = new maplibregl.Map({
+      container: mapContainer.current,
+      style: {
+        version: 8,
+        sources: {
+          'osm-tiles': {
+            type: 'raster',
+            tiles: [
+              'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+            ],
+            tileSize: 256,
+            attribution: '© OpenStreetMap contributors'
+          }
+        },
+        layers: [
+          {
+            id: 'osm-tiles',
+            type: 'raster',
+            source: 'osm-tiles',
+            minzoom: 0,
+            maxzoom: 19
+          }
+        ]
+      },
+      center: [-95.7129, 37.0902], // Center of USA
+      zoom: 4,
+      attributionControl: false
+    });
 
-      {/* County Markers */}
-      {counties.map((county) => {
-        // Convert lat/lng to relative positions (simplified projection)
-        const x = ((county.longitude + 125) / 60) * 100; // Rough US longitude range
-        const y = ((50 - county.latitude) / 25) * 100; // Rough US latitude range
-        
+    map.current.addControl(new maplibregl.NavigationControl(), 'top-right');
+
+    map.current.on('load', () => {
+      setMapLoaded(true);
+      
+      // Add county markers after map loads
+      counties.forEach((county) => {
         const riskColor = 
-          county.computed_risk_score >= 90 ? 'bg-risk-critical' :
-          county.computed_risk_score >= 75 ? 'bg-risk-high' :
-          county.computed_risk_score >= 50 ? 'bg-risk-medium' :
-          'bg-risk-low';
+          county.computed_risk_score >= 90 ? '#dc2626' : // Critical - red
+          county.computed_risk_score >= 75 ? '#ea580c' : // High - orange-red  
+          county.computed_risk_score >= 50 ? '#ca8a04' : // Medium - yellow
+          '#16a34a'; // Low - green
 
-        return (
-          <div
-            key={county.id}
-            className={`absolute cursor-pointer transform -translate-x-1/2 -translate-y-1/2 transition-all duration-200 hover:scale-110 ${
-              selectedCounty?.id === county.id ? 'scale-125 z-20' : 'z-10'
-            }`}
-            style={{ left: `${x}%`, top: `${y}%` }}
-            onClick={() => handleCountyClick(county)}
-          >
-            {/* Red circular marker as specified */}
-            <div className={`w-6 h-6 rounded-full border-2 border-white shadow-lg ${riskColor} flex items-center justify-center`}>
-              <div className="w-2 h-2 bg-white rounded-full opacity-80"></div>
-            </div>
-            
-            {/* County label on hover */}
-            <div className="absolute top-8 left-1/2 transform -translate-x-1/2 bg-black/80 text-white px-2 py-1 rounded text-xs whitespace-nowrap opacity-0 hover:opacity-100 transition-opacity">
-              {county.countyName}
-              <br />
-              Risk: {county.computed_risk_score.toFixed(1)}
+        // Create marker element
+        const markerElement = document.createElement('div');
+        markerElement.className = 'county-marker';
+        markerElement.style.cssText = `
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background-color: ${riskColor};
+          border: 2px solid white;
+          cursor: pointer;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+          transition: transform 0.2s ease;
+        `;
+
+        // Add hover effect
+        markerElement.addEventListener('mouseenter', () => {
+          markerElement.style.transform = 'scale(1.2)';
+        });
+        markerElement.addEventListener('mouseleave', () => {
+          markerElement.style.transform = 'scale(1)';
+        });
+
+        // Create popup for county info
+        const popup = new maplibregl.Popup({ 
+          offset: 25,
+          closeButton: false 
+        }).setHTML(`
+          <div class="p-3 min-w-[200px]">
+            <h3 class="font-semibold text-lg mb-2">${county.countyName} County</h3>
+            <div class="space-y-1 text-sm">
+              <div class="flex justify-between">
+                <span>Risk Score:</span>
+                <span class="font-medium">${county.computed_risk_score.toFixed(1)}</span>
+              </div>
+              <div class="flex justify-between">
+                <span>Population:</span>
+                <span>${county.e_totpop.toLocaleString()}</span>
+              </div>
+              <div class="flex justify-between">
+                <span>Max Temp:</span>
+                <span>${county.ta_max.toFixed(1)}°F</span>
+              </div>
+              <div class="flex justify-between">
+                <span>Air Quality:</span>
+                <span>${county.aqi_category}</span>
+              </div>
             </div>
           </div>
-        );
-      })}
+        `);
 
+        // Create marker
+        const marker = new maplibregl.Marker({ element: markerElement })
+          .setLngLat([county.longitude, county.latitude])
+          .setPopup(popup)
+          .addTo(map.current!);
+
+        // Add click handler
+        markerElement.addEventListener('click', () => {
+          setSelectedCounty(county);
+          toast.success(`Selected ${county.countyName} County`);
+        });
+      });
+    });
+
+    return () => {
+      if (map.current) {
+        map.current.remove();
+        map.current = null;
+      }
+    };
+  }, [counties, setSelectedCounty]);
+
+  // Update marker colors when map view changes
+  useEffect(() => {
+    if (!mapLoaded || !map.current) return;
+
+    const markers = document.querySelectorAll('.county-marker');
+    markers.forEach((marker, index) => {
+      const county = counties[index];
+      if (!county) return;
+
+      let color;
+      if (mapView === 'risk_score') {
+        color = county.computed_risk_score >= 90 ? '#dc2626' :
+                county.computed_risk_score >= 75 ? '#ea580c' :
+                county.computed_risk_score >= 50 ? '#ca8a04' : '#16a34a';
+      } else {
+        // Need met percentage - mock data for now
+        const needMet = Math.random() * 100;
+        color = needMet >= 80 ? '#16a34a' :
+                needMet >= 60 ? '#ca8a04' :
+                needMet >= 40 ? '#ea580c' : '#dc2626';
+      }
+      
+      (marker as HTMLElement).style.backgroundColor = color;
+    });
+  }, [mapView, counties, mapLoaded]);
+
+  return (
+    <div className="relative w-full h-[600px] rounded-lg overflow-hidden border">
+      <div ref={mapContainer} className="w-full h-full" />
+      
       {/* Map Controls */}
       <div className="absolute top-4 right-4 space-y-2">
         <Button
           variant={mapView === 'risk_score' ? 'default' : 'outline'}
           size="sm"
-          onClick={() => setMapView('risk_score')}
+          onClick={() => useAppStore.getState().setMapView('risk_score')}
+          className="bg-white/90 hover:bg-white text-black border shadow-md"
         >
           Risk Score
         </Button>
         <Button
           variant={mapView === 'need_met' ? 'default' : 'outline'}
           size="sm"
-          onClick={() => setMapView('need_met')}
+          onClick={() => useAppStore.getState().setMapView('need_met')}
+          className="bg-white/90 hover:bg-white text-black border shadow-md"
         >
           Need Met %
         </Button>
       </div>
 
       {/* Legend */}
-      <div className="absolute bottom-4 left-4 bg-white/90 dark:bg-black/90 p-3 rounded-lg shadow-lg">
-        <h4 className="text-sm font-semibold mb-2">Risk Levels</h4>
+      <div className="absolute bottom-4 left-4 bg-white/95 p-3 rounded-lg shadow-lg border">
+        <h4 className="text-sm font-semibold mb-2">
+          {mapView === 'risk_score' ? 'Risk Levels' : 'Need Met Percentage'}
+        </h4>
         <div className="space-y-1">
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 rounded-full bg-risk-critical"></div>
-            <span className="text-xs">Critical (90+)</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 rounded-full bg-risk-high"></div>
-            <span className="text-xs">High (75-89)</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 rounded-full bg-risk-medium"></div>
-            <span className="text-xs">Medium (50-74)</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 rounded-full bg-risk-low"></div>
-            <span className="text-xs">Low (&lt;50)</span>
-          </div>
+          {mapView === 'risk_score' ? (
+            <>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 rounded-full bg-[#dc2626]"></div>
+                <span className="text-xs">Critical (90+)</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 rounded-full bg-[#ea580c]"></div>
+                <span className="text-xs">High (75-89)</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 rounded-full bg-[#ca8a04]"></div>
+                <span className="text-xs">Medium (50-74)</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 rounded-full bg-[#16a34a]"></div>
+                <span className="text-xs">Low (&lt;50)</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 rounded-full bg-[#16a34a]"></div>
+                <span className="text-xs">80%+ Met</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 rounded-full bg-[#ca8a04]"></div>
+                <span className="text-xs">60-79% Met</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 rounded-full bg-[#ea580c]"></div>
+                <span className="text-xs">40-59% Met</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 rounded-full bg-[#dc2626]"></div>
+                <span className="text-xs">&lt;40% Met</span>
+              </div>
+            </>
+          )}
         </div>
       </div>
+
+      {!mapLoaded && (
+        <div className="absolute inset-0 bg-white/80 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+            <p className="text-sm text-muted-foreground">Loading map...</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -141,7 +279,7 @@ export default function Map() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <MapVisualization />
+              <InteractiveMap />
             </CardContent>
           </Card>
         </div>
