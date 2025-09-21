@@ -6,16 +6,16 @@
 
 @layer base {
   :root {
-    /* Background & Surface Colors */
-    --background: 210 17% 98%;
+    /* Background & Surface Colors - Enhanced with subtle gradients */
+    --background: 210 25% 96%;
     --foreground: 215 25% 27%;
-    --surface: 210 17% 100%;
-    --surface-secondary: 210 17% 96%;
+    --surface: 210 30% 98%;
+    --surface-secondary: 205 35% 94%;
 
-    /* Card & Container Colors */
-    --card: 210 17% 100%;
+    /* Card & Container Colors - Enhanced with subtle colors */
+    --card: 210 40% 99%;
     --card-foreground: 215 25% 27%;
-    --card-header: 200 25% 95%;
+    --card-header: 200 50% 97%;
 
     /* Interactive Elements */
     --popover: 210 17% 100%;
@@ -64,10 +64,14 @@
     --radius: 0.5rem;
     --header-height: 4rem;
 
-    /* Gradients */
+    /* Enhanced Gradients & Visual Effects */
     --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-hover)));
+    --gradient-secondary: linear-gradient(135deg, hsl(var(--secondary)), hsl(var(--secondary-hover)));
     --gradient-emergency: linear-gradient(135deg, hsl(var(--emergency)), hsl(340 85% 35%));
+    --gradient-success: linear-gradient(135deg, hsl(var(--success)), hsl(140 65% 50%));
     --gradient-surface: linear-gradient(180deg, hsl(var(--surface)), hsl(var(--surface-secondary)));
+    --gradient-card: linear-gradient(145deg, hsl(var(--card)), hsl(var(--surface)));
+    --gradient-header: linear-gradient(90deg, hsl(var(--primary)), hsl(var(--secondary)));
 
     /* Shadows */
     --shadow-sm: 0 1px 2px 0 hsl(var(--primary) / 0.05);
@@ -150,6 +154,6 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-gradient-surface text-foreground;
   }
 }

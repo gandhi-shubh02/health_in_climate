@@ -92,8 +92,12 @@ export default {
       },
       backgroundImage: {
         'gradient-primary': 'var(--gradient-primary)',
+        'gradient-secondary': 'var(--gradient-secondary)',
         'gradient-emergency': 'var(--gradient-emergency)',
+        'gradient-success': 'var(--gradient-success)',
         'gradient-surface': 'var(--gradient-surface)',
+        'gradient-card': 'var(--gradient-card)',
+        'gradient-header': 'var(--gradient-header)',
       },
       boxShadow: {
         'sm': 'var(--shadow-sm)',
