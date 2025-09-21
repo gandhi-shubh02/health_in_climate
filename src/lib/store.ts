@@ -72,7 +72,7 @@ export interface AllocationScenario {
 export interface PredictiveAlert {
   id: string;
   county_id: string;
-  alert_type: 'extreme_heat' | 'air_quality' | 'resource_gap';
+  alert_type: 'extreme_heat' | 'wildfire' | 'flooding';
   severity: 'low' | 'medium' | 'high' | 'critical';
   predicted_date: string;
   confidence: number;

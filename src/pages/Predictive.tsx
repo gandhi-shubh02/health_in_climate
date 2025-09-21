@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Bell, Activity, Wind, Thermometer, Droplets, AlertTriangle } from 'lucide-react';
+import { Bell, Activity, Wind, Thermometer, Droplets, AlertTriangle, Flame, CloudRain } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import { mockCounties } from '@/lib/mock-data';
 import { toast } from 'react-hot-toast';
@@ -28,26 +28,60 @@ export default function Predictive() {
       // Simulate ML prediction process
       await new Promise(resolve => setTimeout(resolve, 3000));
       
-      // Generate new alerts based on simulated future risks
+      // Generate exactly 3 new alerts based on simulated future risks
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + 7);
       
-      const newAlerts = counties
-        .filter(() => Math.random() > 0.7) // Randomly select some counties
-        .map(county => ({
-          id: `alert-${Date.now()}-${Math.random()}`,
+      // Filter to only use the 3 specified counties for predictions
+      const targetCounties = ['Riverside', 'San Bernardino', 'Los Angeles'];
+      const selectedCounties = counties.filter(county => 
+        targetCounties.includes(county.countyName)
+      );
+      
+      // Define 3 distinct disaster types with specific recommendations
+      const disasterTypes = [
+        {
+          alert_type: 'extreme_heat' as const,
+          message: 'Predicted extreme heat wave with temperatures exceeding 110°F',
+          recommendations: [
+            'Activate cooling centers and distribute water to vulnerable populations',
+            'Implement power grid load balancing to prevent blackouts',
+            'Issue heat advisory warnings and check on elderly residents'
+          ]
+        },
+        {
+          alert_type: 'wildfire' as const,
+          message: 'High wildfire risk due to dry conditions and strong winds',
+          recommendations: [
+            'Pre-position firefighting equipment and personnel in high-risk areas',
+            'Clear defensible space around critical infrastructure',
+            'Prepare evacuation routes and emergency shelters'
+          ]
+        },
+        {
+          alert_type: 'flooding' as const,
+          message: 'Flash flood warning due to heavy rainfall and poor drainage',
+          recommendations: [
+            'Deploy sandbags and flood barriers around vulnerable areas',
+            'Activate emergency drainage systems and pump stations',
+            'Prepare rescue boats and establish evacuation centers'
+          ]
+        }
+      ];
+      
+      const newAlerts = selectedCounties.map((county, index) => {
+        const disasterType = disasterTypes[index];
+        return {
+          id: `alert-${Date.now()}-${index}`,
           county_id: county.id,
-          alert_type: Math.random() > 0.5 ? 'extreme_heat' as const : 'air_quality' as const,
+          alert_type: disasterType.alert_type,
           severity: Math.random() > 0.5 ? 'critical' as const : 'high' as const,
           predicted_date: futureDate.toISOString().split('T')[0],
           confidence: (Math.floor(Math.random() * 30 + 70)) / 100, // 0.70-0.99
-          message: `Predicted ${Math.random() > 0.5 ? 'extreme heat event' : 'wildfire risk'} based on current trends`,
-          recommendations: [
-            'Increase water supply reserves by 40%',
-            'Pre-position firefighting equipment',
-            'Issue evacuation readiness alerts'
-          ]
-        }));
+          message: disasterType.message,
+          recommendations: disasterType.recommendations
+        };
+      });
       
       newAlerts.forEach(alert => addAlert(alert));
       
@@ -67,6 +101,19 @@ export default function Predictive() {
   const acknowledgeAlert = (alertId: string) => {
     removeAlert(alertId);
     toast.success('Alert acknowledged');
+  };
+
+  const getAlertIcon = (alertType: string) => {
+    switch (alertType) {
+      case 'extreme_heat':
+        return <Thermometer className="h-5 w-5 text-emergency" />;
+      case 'wildfire':
+        return <Flame className="h-5 w-5 text-emergency" />;
+      case 'flooding':
+        return <CloudRain className="h-5 w-5 text-emergency" />;
+      default:
+        return <AlertTriangle className="h-5 w-5 text-emergency" />;
+    }
   };
 
   // Environmental monitoring data for counties
@@ -148,7 +195,7 @@ export default function Predictive() {
                   <div className="flex items-start justify-between">
                     <div className="space-y-3 flex-1">
                       <div className="flex items-center gap-3">
-                        <AlertTriangle className="h-5 w-5 text-emergency" />
+                        {getAlertIcon(alert.alert_type)}
                         <h3 className="text-lg font-semibold text-foreground capitalize">
                           {alert.alert_type.replace('_', ' ')}
                         </h3>

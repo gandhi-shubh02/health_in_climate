@@ -35,6 +35,9 @@ export default function AlertDrafter({ alert, onClose }: AlertDrafterProps) {
     setIsGeneratingEmail(true);
     setEmailDraft('');
 
+    // Add initial delay to simulate AI thinking/processing
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
     const emailTemplate = `Subject: URGENT: ${alert.alert_type.replace('_', ' ').toUpperCase()} Alert - ${countyName}
 
 Dear Emergency Response Team,
@@ -73,6 +76,9 @@ AidVantage AI Alert System`;
   const generateSmsDraft = async () => {
     setIsGeneratingSms(true);
     setSmsDraft('');
+
+    // Add initial delay to simulate AI thinking/processing
+    await new Promise(resolve => setTimeout(resolve, 1200));
 
     const smsTemplate = `🚨 URGENT ALERT - ${countyName}
 
