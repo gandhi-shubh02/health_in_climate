@@ -13,8 +13,30 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 const InteractiveMap = () => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
-  const { counties, selectedCounty, setSelectedCounty, mapView } = useAppStore();
+  const { counties, selectedCounty, setSelectedCounty, mapView, scenarios } = useAppStore();
   const [mapLoaded, setMapLoaded] = useState(false);
+
+  // Calculate need met percentage based on allocation data
+  const calculateNeedMetPercentage = (county: typeof counties[0]) => {
+    if (!scenarios || scenarios.length === 0) {
+      // Base calculation on county characteristics when no scenarios exist
+      const riskFactor = county.computed_risk_score / 100;
+      const populationFactor = Math.min(county.e_totpop / 100000, 1);
+      const vulnerabilityFactor = (county.e_age65 + county.eminrty + county.e_unemp) / 300;
+      
+      // Higher risk and vulnerability = lower need met percentage
+      const baseCoverage = 90 - (riskFactor * 30) - (vulnerabilityFactor * 20) - (populationFactor * 10);
+      return Math.max(20, Math.min(95, baseCoverage));
+    }
+    
+    // Calculate from latest scenario allocations
+    const latestScenario = scenarios[scenarios.length - 1];
+    const countyAllocations = latestScenario.allocations.filter(a => a.county_id === county.id);
+    
+    if (countyAllocations.length === 0) return 25; // No allocations = low coverage
+    
+    return countyAllocations.reduce((sum, alloc) => sum + alloc.need_met_percentage, 0) / countyAllocations.length;
+  };
 
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
@@ -75,12 +97,16 @@ const InteractiveMap = () => {
           transition: transform 0.2s ease;
         `;
 
-        // Add hover effect
+        // Add hover effect with proper CSS class instead of transform
         markerElement.addEventListener('mouseenter', () => {
-          markerElement.style.transform = 'scale(1.2)';
+          markerElement.style.width = '24px';
+          markerElement.style.height = '24px';
+          markerElement.style.boxShadow = '0 4px 8px rgba(0,0,0,0.4)';
         });
         markerElement.addEventListener('mouseleave', () => {
-          markerElement.style.transform = 'scale(1)';
+          markerElement.style.width = '20px';
+          markerElement.style.height = '20px';
+          markerElement.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
         });
 
         // Create popup for county info
@@ -148,8 +174,8 @@ const InteractiveMap = () => {
                 county.computed_risk_score >= 75 ? '#ea580c' :
                 county.computed_risk_score >= 50 ? '#ca8a04' : '#16a34a';
       } else {
-        // Need met percentage - mock data for now
-        const needMet = Math.random() * 100;
+        // Need met percentage - calculate based on allocation data
+        const needMet = calculateNeedMetPercentage(county);
         color = needMet >= 80 ? '#16a34a' :
                 needMet >= 60 ? '#ca8a04' :
                 needMet >= 40 ? '#ea580c' : '#dc2626';
@@ -164,12 +190,14 @@ const InteractiveMap = () => {
       <div ref={mapContainer} className="w-full h-full" />
       
       {/* Map Controls */}
-      <div className="absolute top-4 right-4 space-y-2">
+      <div className="absolute top-4 right-4 flex flex-col space-y-2">
         <Button
           variant={mapView === 'risk_score' ? 'default' : 'outline'}
           size="sm"
           onClick={() => useAppStore.getState().setMapView('risk_score')}
-          className="bg-white/90 hover:bg-white text-black border shadow-md"
+          className={`${mapView === 'risk_score' 
+            ? 'bg-primary text-primary-foreground' 
+            : 'bg-white/90 hover:bg-white text-foreground'} border shadow-md transition-all`}
         >
           Risk Score
         </Button>
@@ -177,7 +205,9 @@ const InteractiveMap = () => {
           variant={mapView === 'need_met' ? 'default' : 'outline'}
           size="sm"
           onClick={() => useAppStore.getState().setMapView('need_met')}
-          className="bg-white/90 hover:bg-white text-black border shadow-md"
+          className={`${mapView === 'need_met' 
+            ? 'bg-primary text-primary-foreground' 
+            : 'bg-white/90 hover:bg-white text-foreground'} border shadow-md transition-all`}
         >
           Need Met %
         </Button>
