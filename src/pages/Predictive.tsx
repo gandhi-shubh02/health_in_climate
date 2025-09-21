@@ -7,12 +7,14 @@ import { useAppStore } from '@/lib/store';
 import { mockCounties } from '@/lib/mock-data';
 import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
+import AlertDrafter from '@/components/ai/AlertDrafter';
 
 export default function Predictive() {
   const { alerts, addAlert, removeAlert } = useAppStore();
   const [counties, setCounties] = useState(mockCounties);
   const [isLoading, setIsLoading] = useState(false);
   const [isPredicting, setIsPredicting] = useState(false);
+  const [selectedAlert, setSelectedAlert] = useState<any>(null);
 
   useEffect(() => {
     setCounties(mockCounties);
@@ -105,7 +107,7 @@ export default function Predictive() {
         <div className="flex items-center gap-3">
           <Bell className="h-8 w-8 text-primary" />
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Predictive Alert System</h1>
+            <h1 className="text-3xl font-bold text-foreground">AI Alert System</h1>
             <p className="text-muted-foreground">
               AI-powered early warning system using environmental data and risk factors
             </p>
@@ -175,7 +177,7 @@ export default function Predictive() {
                       </div>
                       
                       <div className="space-y-2">
-                        <h4 className="font-medium text-foreground">Recommended Actions:</h4>
+                        <h4 className="font-medium text-foreground">AI Recommendations:</h4>
                         <ul className="space-y-1 text-sm text-muted-foreground">
                           {alert.recommendations.map((rec, index) => (
                             <li key={index} className="flex items-start gap-2">
@@ -190,10 +192,10 @@ export default function Predictive() {
                     <Button 
                       variant="outline" 
                       size="sm"
-                      onClick={() => acknowledgeAlert(alert.id)}
+                      onClick={() => setSelectedAlert(alert)}
                       className="ml-4"
                     >
-                      Acknowledge
+                      Draft Alert
                     </Button>
                   </div>
                 </CardContent>
@@ -291,6 +293,14 @@ export default function Predictive() {
             </Button>
           </CardContent>
         </Card>
+      )}
+
+      {/* Alert Drafter Modal */}
+      {selectedAlert && (
+        <AlertDrafter
+          alert={selectedAlert}
+          onClose={() => setSelectedAlert(null)}
+        />
       )}
     </div>
   );
